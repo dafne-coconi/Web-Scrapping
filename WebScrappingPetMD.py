@@ -1,5 +1,6 @@
 import json
 import time
+import re
 from selenium import webdriver
 from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.firefox.options import Options
@@ -37,19 +38,23 @@ for i, url in enumerate(condition_links):
         article_soup = BeautifulSoup(driver.page_source, 'html.parser')
 
         title = article_soup.find('h1').text.strip()
+        print(f'title {title}')
 
         # Buscar el contenido completo del artículo
-        content_div = article_soup.find('div', class_='article-body')
+        content_div = article_soup.find('div', class_='article_content_article_body__GQzms')
         content = content_div.get_text(separator=' ', strip=True) if content_div else "Contenido no disponible"
+        #print(content_div)
 
-        # Simulación básica de síntomas y recomendaciones ß
-        symptom_patterns = [
-            r"(?:Symptoms|Signs)(?: of [\w\s]+)?(?: include| are| may include)[:\s]+(.+?)(?:\.|\n|$)",
-            r"Common symptoms(?: include| are)[:\s]+(.+?)(?:\.|\n|$)",
-            r"Symptoms and Types"
-        ]
+        # Simulación básica de síntomas y recomendaciones 
+        #symptom_patterns = [
+         #   r"(?:Symptoms|Signs)(?: of [\w\s]+)?(?: include| are| may include)[:\s]+(.+?)(?:\.|\n|$)",
+          #  r"Common symptoms(?: include| are)[:\s]+(.+?)(?:\.|\n|$)",
+           # r"(?:Symptoms and Types)+(.+?)(?:\.|\n|$)"
+        #]
+        header_symptoms = content_div.find(lambda tag: tag.name in ['h2', 'h3', 'h4'] and ("Symptoms and Types") in tag.text)
 
         symptoms = ["síntoma no identificado"]  # Regular
+    
         """
         for pattern in symptom_patterns:
             match = re.search(pattern, content, re.IGNORECASE)
@@ -59,6 +64,23 @@ for i, url in enumerate(condition_links):
                 symptoms = [s.strip().lower() for s in re.split(r',| and ', raw) if s.strip()]
                 break
         """
+
+        if header_symptoms:
+            # 4. Extraer el siguiente hermano (párrafo, lista, etc.)
+            symptoms = []
+            next_element = header_symptoms.find_next_sibling()
+            print(next_element)
+            
+            while next_element and next_element.name not in ['h1', 'h2', 'h3', 'h4']:
+                print(next_element.name)
+                if next_element.name == 'p' and len(next_element.get_text(strip=True)) > 1:
+                    symptoms.append(next_element.get_text(strip=True))
+                elif next_element.name == 'ul':
+                    symptoms.extend([li.get_text(strip=True) for li in next_element.find_all('li')])
+                next_element = next_element.find_next_sibling()
+            
+            print("Síntomas encontrados:", symptoms)
+        
         recommendations = "Consulta a un veterinario para diagnóstico profesional."
 
         results.append({

@@ -58,12 +58,13 @@ soup = BeautifulSoup(driver.page_source, 'html.parser')
 # Obtener todos los enlaces
 condition_links = []
 
-for num_card in range(8, 49):
-    print(num_card)
+for num_card in range(509, 800):
     card_title = f'div.kib-grid__item--span-4\@min-xs:nth-child({num_card}) a'
     #card_title = f'div.kib-grid__item:nth-child({num_card}) a'
     cards = soup.select(card_title)
-    condition_links.append(base_url + cards[0]['href'])
+    if len(cards) > 0:
+        print(num_card)
+        condition_links.append(base_url + cards[0]['href'])
 
 print(f"Se encontraron {len(condition_links)} condiciones. Extrayendo información...\n")
 
@@ -73,6 +74,9 @@ results = []
 # Recorrer cada enlace
 for i, url in enumerate(condition_links):
     try:
+        if 'conditions' not in url:
+            continue
+
         driver.get(url)
         time.sleep(4)
         article_soup = BeautifulSoup(driver.page_source, 'html.parser')
@@ -95,48 +99,14 @@ for i, url in enumerate(condition_links):
             summary = f'The sickness is called {title}'
 
         # ----- SÍNTOMAS --------
-        header_symptoms = content_div.find(lambda tag: tag.name in ['h2', 'h3', 'h4'] and ("Symptoms") in tag.text)
+        symptoms = GetSections(content_div, section = 'Symptoms')
+        if len(symptoms) < 1:
+            symptoms = ["síntoma no identificado"]  # Regular
 
-        symptoms = ["síntoma no identificado"]  # Regular
-
-        if header_symptoms:
-            # 4. Extraer el siguiente hermano (párrafo, lista, etc.)
-            symptoms = []
-            next_element = header_symptoms.find_next_sibling()
-            print(next_element)
-            
-            while next_element and next_element.name not in ['h1', 'h2', 'h3', 'h4']:
-                print(next_element.name)
-                if next_element.name == 'p' and len(next_element.get_text(strip=True)) > 0:
-                    text_symp = next_element.get_text(strip=True)
-                    symptoms.append(text_symp.replace('\t',''))
-                elif next_element.name == 'ul':
-                    symptoms.extend([li.get_text(strip=True).replace('\t', '') for li in next_element.find_all('li')])
-                next_element = next_element.find_next_sibling()
-            
-            print("Síntomas encontrados:", symptoms)
-        
         # ----------- CAUSAS -------------------
-        header_causes = content_div.find(lambda tag: tag.name in ['h2', 'h3', 'h4'] and ("Causes") in tag.text)
-
-        causes = ["Causas no identificadas"]  # Regular
-
-        if header_causes:
-            # 4. Extraer el siguiente hermano (párrafo, lista, etc.)
-            causes = []
-            next_element = header_causes.find_next_sibling()
-            print(next_element)
-            
-            while next_element and next_element.name not in ['h1', 'h2', 'h3', 'h4']:
-                print(next_element.name)
-                if next_element.name == 'p' and len(next_element.get_text(strip=True)) > 0:
-                    text_causes = next_element.get_text(strip=True)
-                    causes.append(text_causes.replace('\t',''))
-                elif next_element.name == 'ul':
-                    causes.extend([li.get_text(strip=True).replace('\t', '') for li in next_element.find_all('li')])
-                next_element = next_element.find_next_sibling()
-            
-            print("Causas encontradas:", causes)
+        causes = GetSections(content_div, section = 'Causes')
+        if len(causes) < 1:
+            causes = ["Causas no identificadas"]  # Regular
 
         # ----------- DIAGNOSIS ----------------
         diagnosis = GetSections(content_div, section = 'Diagnose', second2 ='Diagnosis')
@@ -173,7 +143,7 @@ for i, url in enumerate(condition_links):
 driver.quit()
 
 # Guardar resultados en archivo JSON
-with open("condiciones_mascotas.json", "w", encoding="utf-8") as f:
+with open("condiciones_mascotas_O.json", "w", encoding="utf-8") as f:
     json.dump(results, f, ensure_ascii=False, indent=2)
 
 print("\nScraping finalizado. Archivo 'condiciones_mascotas.json' generado.")

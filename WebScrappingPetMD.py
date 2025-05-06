@@ -20,10 +20,19 @@ time.sleep(5)
 soup = BeautifulSoup(driver.page_source, 'html.parser')
 
 # Obtener todos los enlaces
-#card_title = 'kib-grid__item kib-grid__item--span-4@min-xs kib-grid__item--span-4@md kib-grid__item--span-4@min-lg az_list_grid_item__KWCvL'
-card_title = 'div.kib-grid__item--span-4\@min-xs:nth-child(9) a'
-cards = soup.select(card_title)
-condition_links = [base_url + card['href'] for card in cards]
+condition_links = []
+#card_title = f'div.kib-grid__item--span-4\@min-xs:nth-child(10) a'
+#cards = soup.select(card_title)
+#condition_links = [base_url + card['href'] for card in cards]
+#print(f'cards {cards}')
+#print(condition_links)
+#print(cards[0]['href'])
+
+for num_card in range(9, 11):
+    print(num_card)
+    card_title = f'div.kib-grid__item--span-4\@min-xs:nth-child({num_card}) a'
+    cards = soup.select(card_title)
+    condition_links.append(base_url + cards[0]['href'])
 
 print(f"Se encontraron {len(condition_links)} condiciones. Extrayendo información...\n")
 
@@ -51,7 +60,7 @@ for i, url in enumerate(condition_links):
           #  r"Common symptoms(?: include| are)[:\s]+(.+?)(?:\.|\n|$)",
            # r"(?:Symptoms and Types)+(.+?)(?:\.|\n|$)"
         #]
-        header_symptoms = content_div.find(lambda tag: tag.name in ['h2', 'h3', 'h4'] and ("Symptoms and Types") in tag.text)
+        header_symptoms = content_div.find(lambda tag: tag.name in ['h2', 'h3', 'h4'] and ("Symptoms") in tag.text)
 
         symptoms = ["síntoma no identificado"]  # Regular
     
@@ -73,10 +82,11 @@ for i, url in enumerate(condition_links):
             
             while next_element and next_element.name not in ['h1', 'h2', 'h3', 'h4']:
                 print(next_element.name)
-                if next_element.name == 'p' and len(next_element.get_text(strip=True)) > 1:
-                    symptoms.append(next_element.get_text(strip=True))
+                if next_element.name == 'p' and len(next_element.get_text(strip=True)) > 0:
+                    text_symp = next_element.get_text(strip=True)
+                    symptoms.append(text_symp.replace('\t',''))
                 elif next_element.name == 'ul':
-                    symptoms.extend([li.get_text(strip=True) for li in next_element.find_all('li')])
+                    symptoms.extend([li.get_text(strip=True).replace('\t', '') for li in next_element.find_all('li')])
                 next_element = next_element.find_next_sibling()
             
             print("Síntomas encontrados:", symptoms)

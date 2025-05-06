@@ -1,11 +1,47 @@
 import json
 import time
 import re
+import sys
+import os
 from selenium import webdriver
 from selenium.webdriver.firefox.service import Service
 from selenium.webdriver.firefox.options import Options
 from webdriver_manager.firefox import GeckoDriverManager
 from bs4 import BeautifulSoup
+
+def GetSections(content_div, **kwargs):
+    list_section = []
+    section = ''
+    section2 = ''
+    options = {'section' : '',
+                'section2' : '', }
+    options.update(kwargs)
+    #second_name_sec = kwargs.pop('second_name_sec','')
+    #print(options['section2'])
+    if len(options['section2']) > 0:
+        header_section = content_div.find(lambda tag: tag.name in ['h2', 'h3', 'h4'] and (options['section'] or options['section2']) in tag.text) 
+    else:
+        header_section = content_div.find(lambda tag: tag.name in ['h2', 'h3', 'h4'] and (f"{section}") in tag.text)
+
+    #print(f"header_section {header_section}")
+
+    if header_section:
+        # 4. Extraer el siguiente hermano (párrafo, lista, etc.)
+        next_element = header_section.find_next_sibling()
+        #print(next_element)
+        
+        while next_element and next_element.name not in ['h1', 'h2', 'h3', 'h4']:
+            #print(next_element.name)
+            if next_element.name == 'p' and len(next_element.get_text(strip=True)) > 0:
+                text_paragraph = next_element.get_text(strip=True)
+                list_section.append(text_paragraph.replace('\t',''))
+            elif next_element.name == 'ul':
+                list_section.extend([li.get_text(strip=True).replace('\t', '') for li in next_element.find_all('li')])
+            next_element = next_element.find_next_sibling()
+        
+        print(f"{section} encontradas: {list_section}")
+    
+    return list_section
 
 options = Options()
 options.headless = True
@@ -21,16 +57,11 @@ soup = BeautifulSoup(driver.page_source, 'html.parser')
 
 # Obtener todos los enlaces
 condition_links = []
-#card_title = f'div.kib-grid__item--span-4\@min-xs:nth-child(10) a'
-#cards = soup.select(card_title)
-#condition_links = [base_url + card['href'] for card in cards]
-#print(f'cards {cards}')
-#print(condition_links)
-#print(cards[0]['href'])
 
-for num_card in range(9, 11):
+for num_card in range(8, 49):
     print(num_card)
     card_title = f'div.kib-grid__item--span-4\@min-xs:nth-child({num_card}) a'
+    #card_title = f'div.kib-grid__item:nth-child({num_card}) a'
     cards = soup.select(card_title)
     condition_links.append(base_url + cards[0]['href'])
 
@@ -54,25 +85,19 @@ for i, url in enumerate(condition_links):
         content = content_div.get_text(separator=' ', strip=True) if content_div else "Contenido no disponible"
         #print(content_div)
 
-        # Simulación básica de síntomas y recomendaciones 
-        #symptom_patterns = [
-         #   r"(?:Symptoms|Signs)(?: of [\w\s]+)?(?: include| are| may include)[:\s]+(.+?)(?:\.|\n|$)",
-          #  r"Common symptoms(?: include| are)[:\s]+(.+?)(?:\.|\n|$)",
-           # r"(?:Symptoms and Types)+(.+?)(?:\.|\n|$)"
-        #]
+        # ----- RESUMEN --------
+        header_resumen = content_div.find('h2')
+        paragraph = header_resumen.find_next_sibling('p')
+        
+        if paragraph:
+            summary = paragraph.get_text()
+        else: 
+            summary = f'The sickness is called {title}'
+
+        # ----- SÍNTOMAS --------
         header_symptoms = content_div.find(lambda tag: tag.name in ['h2', 'h3', 'h4'] and ("Symptoms") in tag.text)
 
         symptoms = ["síntoma no identificado"]  # Regular
-    
-        """
-        for pattern in symptom_patterns:
-            match = re.search(pattern, content, re.IGNORECASE)
-            if match:
-                raw = match.group(1)  # Ej: "vomiting, lethargy, and diarrhea"
-                # Separar los síntomas por comas o "and"
-                symptoms = [s.strip().lower() for s in re.split(r',| and ', raw) if s.strip()]
-                break
-        """
 
         if header_symptoms:
             # 4. Extraer el siguiente hermano (párrafo, lista, etc.)
@@ -91,12 +116,46 @@ for i, url in enumerate(condition_links):
             
             print("Síntomas encontrados:", symptoms)
         
-        recommendations = "Consulta a un veterinario para diagnóstico profesional."
+        # ----------- CAUSAS -------------------
+        header_causes = content_div.find(lambda tag: tag.name in ['h2', 'h3', 'h4'] and ("Causes") in tag.text)
 
+        causes = ["Causas no identificadas"]  # Regular
+
+        if header_causes:
+            # 4. Extraer el siguiente hermano (párrafo, lista, etc.)
+            causes = []
+            next_element = header_causes.find_next_sibling()
+            print(next_element)
+            
+            while next_element and next_element.name not in ['h1', 'h2', 'h3', 'h4']:
+                print(next_element.name)
+                if next_element.name == 'p' and len(next_element.get_text(strip=True)) > 0:
+                    text_causes = next_element.get_text(strip=True)
+                    causes.append(text_causes.replace('\t',''))
+                elif next_element.name == 'ul':
+                    causes.extend([li.get_text(strip=True).replace('\t', '') for li in next_element.find_all('li')])
+                next_element = next_element.find_next_sibling()
+            
+            print("Causas encontradas:", causes)
+
+        # ----------- DIAGNOSIS ----------------
+        diagnosis = GetSections(content_div, section = 'Diagnose', second2 ='Diagnosis')
+        if len(diagnosis) < 1:
+            diagnosis = ["Diagnóstico no disponible"]  # Regular
+
+        # -------- MANEJO DE ENFERMEDAD --------
+        recommendations = GetSections(content_div, section = 'Management')
+        if len(recommendations) < 1:
+            recommendations = "Consulta a un veterinario para diagnóstico profesional."
+        
+        # ---------- JSON FILE -------------
         results.append({
             "id": str(i + 1),
             "title": title,
+            "summary": summary,
+            "causes": causes,
             "symptoms": symptoms,
+            "diagnosis": diagnosis,
             "recommendations": recommendations,
             "content": content,
             "url": url
@@ -105,6 +164,10 @@ for i, url in enumerate(condition_links):
         print(f"[{i + 1}] {title}")
     except Exception as e:
         print(f"Error en {url}: {e}")
+        exc_type, exc_obj, exc_tb = sys.exc_info()
+        fname = os.path.split(exc_tb.tb_frame.f_code.co_filename)[1]
+        print(exc_type, fname, exc_tb.tb_lineno)
+        
 
 # Cerrar el navegador
 driver.quit()

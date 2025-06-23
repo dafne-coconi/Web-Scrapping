@@ -11,19 +11,20 @@ from bs4 import BeautifulSoup
 
 def GetSections(content_div, **kwargs):
     list_section = []
-    section = ''
-    section2 = ''
+    header_section = ''
     options = {'section' : '',
                 'section2' : '', }
     options.update(kwargs)
+    #print(f"\n KWARGS{kwargs}")
+    #print(f"\n options {options}")
     #second_name_sec = kwargs.pop('second_name_sec','')
-    #print(options['section2'])
-    if len(options['section2']) > 0:
-        header_section = content_div.find(lambda tag: tag.name in ['h2', 'h3', 'h4'] and (options['section'] or options['section2']) in tag.text) 
+    #print(options)
+    if len(kwargs) > 1:
+        header_section = content_div.find(lambda tag: tag.name in ['h2', 'h3', 'h4'] and ((options['section'] in tag.text) or (options['section2'] in tag.text)))
     else:
-        header_section = content_div.find(lambda tag: tag.name in ['h2', 'h3', 'h4'] and (f"{section}") in tag.text)
+        header_section = content_div.find(lambda tag: tag.name in ['h2', 'h3', 'h4'] and options['section'] in tag.text)
 
-    #print(f"header_section {header_section}")
+    #print(f"\n header_section {header_section}")
 
     if header_section:
         # 4. Extraer el siguiente hermano (párrafo, lista, etc.)
@@ -39,7 +40,7 @@ def GetSections(content_div, **kwargs):
                 list_section.extend([li.get_text(strip=True).replace('\t', '') for li in next_element.find_all('li')])
             next_element = next_element.find_next_sibling()
         
-        print(f"{section} encontradas: {list_section}")
+        #print(f"\n {section} encontradas: {list_section}")
     
     return list_section
 
@@ -48,25 +49,28 @@ options.headless = True
 driver = webdriver.Firefox(service=Service(GeckoDriverManager().install()), options=options)
 
 base_url = "https://www.petmd.com"
-start_url = f"{base_url}/dog/conditions"
+start_url = f"{base_url}/cat/conditions"
 
 driver.get(start_url)
-time.sleep(5)
+time.sleep(4)
 
 soup = BeautifulSoup(driver.page_source, 'html.parser')
 
 # Obtener todos los enlaces
 condition_links = []
 
-for num_card in range(509, 800):
-    card_title = f'div.kib-grid__item--span-4\@min-xs:nth-child({num_card}) a'
+for num_card in range(8, 510):
+    #div.kib-grid__item--span-4\@min-xs:nth-child(8)
+    #div.kib-grid__item--span-4\@md:nth-child(5)
+    card_title = f'div.kib-grid__item--span-4\@md:nth-child({num_card}) a'
+    #card_title = f'div.kib-grid__item--span-4\@min-xs:nth-child({num_card}) a'
     #card_title = f'div.kib-grid__item:nth-child({num_card}) a'
     cards = soup.select(card_title)
     if len(cards) > 0:
-        print(num_card)
+        #print(num_card)
         condition_links.append(base_url + cards[0]['href'])
 
-print(f"Se encontraron {len(condition_links)} condiciones. Extrayendo información...\n")
+#print(f"Se encontraron {len(condition_links)} condiciones. Extrayendo información...\n")
 
 # Lista para guardar resultados
 results = []
@@ -80,6 +84,8 @@ for i, url in enumerate(condition_links):
         driver.get(url)
         time.sleep(4)
         article_soup = BeautifulSoup(driver.page_source, 'html.parser')
+        section = ''
+        section2 = ''
 
         title = article_soup.find('h1').text.strip()
         print(f'title {title}')
@@ -90,8 +96,7 @@ for i, url in enumerate(condition_links):
         #print(content_div)
 
         # ----- RESUMEN --------
-        header_resumen = content_div.find('h2')
-        paragraph = header_resumen.find_next_sibling('p')
+        paragraph = content_div.find_next_sibling('h2')
         
         if paragraph:
             summary = paragraph.get_text()
@@ -101,22 +106,22 @@ for i, url in enumerate(condition_links):
         # ----- SÍNTOMAS --------
         symptoms = GetSections(content_div, section = 'Symptoms')
         if len(symptoms) < 1:
-            symptoms = ["síntoma no identificado"]  # Regular
+            symptoms = ["Síntoms not identified"]  # Regular
 
         # ----------- CAUSAS -------------------
         causes = GetSections(content_div, section = 'Causes')
         if len(causes) < 1:
-            causes = ["Causas no identificadas"]  # Regular
+            causes = ["Review with your veterinarian about possible causes"]  # Regular
 
         # ----------- DIAGNOSIS ----------------
-        diagnosis = GetSections(content_div, section = 'Diagnose', second2 ='Diagnosis')
+        diagnosis = GetSections(content_div, section = 'Diagnose', section2 ='Diagnosis')
         if len(diagnosis) < 1:
-            diagnosis = ["Diagnóstico no disponible"]  # Regular
+            diagnosis = ["Review with your veterinarian about the diagnosis"]  # Regular
 
         # -------- MANEJO DE ENFERMEDAD --------
         recommendations = GetSections(content_div, section = 'Management')
         if len(recommendations) < 1:
-            recommendations = "Consulta a un veterinario para diagnóstico profesional."
+            recommendations = "Review with your veterinarian for a professional diagnosis and recommendations."
         
         # ---------- JSON FILE -------------
         results.append({
@@ -127,7 +132,7 @@ for i, url in enumerate(condition_links):
             "symptoms": symptoms,
             "diagnosis": diagnosis,
             "recommendations": recommendations,
-            "content": content,
+            "content": content[:200],
             "url": url
         })
 
@@ -143,7 +148,7 @@ for i, url in enumerate(condition_links):
 driver.quit()
 
 # Guardar resultados en archivo JSON
-with open("condiciones_mascotas_O.json", "w", encoding="utf-8") as f:
+with open("condiciones_gatos_Final2.json", "w", encoding="utf-8") as f:
     json.dump(results, f, ensure_ascii=False, indent=2)
 
 print("\nScraping finalizado. Archivo 'condiciones_mascotas.json' generado.")
